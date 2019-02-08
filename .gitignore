@@ -1,4 +1,6 @@
 ECE276A_HW2/*
+dataRGBD/*
+.vscode/*
 *.zip
 *.npz
 *.npy
