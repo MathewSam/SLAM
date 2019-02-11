@@ -1,6 +1,9 @@
 ECE276A_HW2/*
 dataRGBD/*
 .vscode/*
+__pycache__/*
+.ipynb_checkpoints/*
+*.ipynb
 *.zip
 *.npz
 *.npy
