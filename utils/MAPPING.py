@@ -3,6 +3,50 @@ Explains the observation model
 '''
 import numpy as np
 import matplotlib.pyplot as plt 
+import cv2
+
+
+def bresenham2D(sx, sy, ex, ey):
+    '''
+    Bresenham's ray tracing algorithm in 2D.
+    Inputs:
+        (sx, sy)	start point of ray
+        (ex, ey)	end point of ray
+    '''
+    sx = int(round(sx))
+    sy = int(round(sy))
+    ex = int(round(ex))
+    ey = int(round(ey))
+    dx = abs(ex-sx)
+    dy = abs(ey-sy)
+    steep = abs(dy)>abs(dx)
+    if steep:
+        dx,dy = dy,dx # swap 
+
+    if dy == 0:
+        q = np.zeros((dx+1,1))
+    else:
+        q = np.append(0,np.greater_equal(np.diff(np.mod(np.arange( np.floor(dx/2), -dy*dx+np.floor(dx/2)-1,-dy),dx)),0))
+    if steep:
+        if sy <= ey:
+            y = np.arange(sy,ey+1)
+        else:
+            y = np.arange(sy,ey-1,-1)
+        if sx <= ex:
+            x = sx + np.cumsum(q)
+        else:
+            x = sx - np.cumsum(q)
+    else:
+        if sx <= ex:
+            x = np.arange(sx,ex+1)
+        else:
+            x = np.arange(sx,ex-1,-1)
+        if sy <= ey:
+            y = sy + np.cumsum(q)
+        else:
+            y = sy - np.cumsum(q)
+    return np.vstack((x,y))
+
 
 class ObservationModel:
     def __init__(self,max_right,max_left,max_front,max_behind,res,p11=0.75,p00=0.75):
@@ -33,58 +77,38 @@ class ObservationModel:
         self._grid_stats = {"minx":max_left,"miny":max_behind,"maxx":max_right,"maxy":max_front,"res":res}
 
         self._p11 = p11
-        self._p00 = p00 
         self._p01 = 1 - p11
-        self._p10 = 1 - p00
+        self._odds_update = np.log(p11/(1-p11))
 
         self._shape = (int((self._grid_stats["maxx"] - self._grid_stats["minx"])//self._grid_stats["res"]) + 1,int((self._grid_stats["maxy"] - self._grid_stats["miny"])//self._grid_stats["res"]) + 1)
+        self._grid_shift_vector = np.array([self._grid_stats['minx'],self._grid_stats['miny']])
+
         self.occupancy_map = np.zeros(self._shape,dtype=np.uint8)
         self.logodds_map = np.zeros(self._shape,dtype=np.float64)
 
-    def generate_map(self,ranges,LIDAR_stats,robot_state,display_map=True):
+    def generate_map(self,particle,LIDAR_reading):
         '''
-        Initializes the map from the first range reading from LIDAR
+        Generate map for a specific LIDAR readings
         params:
-            self : pointer to current class instance
-            ranges : first LIDAR reading in the form of ranges
-            LIDAR_stats : dictionary of LIDAR properties
-            robot_state : most likely robot state(x,y,yaw)
-        kwargs:
-            display_map : option to display map
-            default_value : True
+            self : pointer to current instance of the class
+            particle : most likely particle 
+            LIDAR_readings : Homogenous map from current LIDAR reading
         '''
-        angle_span = LIDAR_stats["angle_span"]
-        range_max = LIDAR_stats["range_max"]
-        range_min = LIDAR_stats["range_min"]
+        wTb = np.array([[np.cos(particle[-1]),np.sin(particle[-1]),0,particle[0]],[-np.sin(particle[-1]),np.cos(particle[-1]),0,particle[1]],[0,0,1,0],[0,0,0,1]])
+        map_coordinates = np.floor((np.dot(wTb,LIDAR_reading)[:2,:] - self._grid_shift_vector.reshape(-1,1))/self._grid_stats["res"]).astype(np.uint16)#Transfer points into world co ordinates
+        beam_source = np.floor((np.array([particle[0],particle[1]]) - self._grid_shift_vector)/self._grid_stats["res"]).astype(np.uint16)
+        beam_ends = map_coordinates.T.tolist()
+        for beam_end in beam_ends:
+            scans = bresenham2D(beam_source[0],beam_source[1],beam_end[0],beam_end[1]).astype(np.uint16)
+            self.logodds_map[scans[0][-1],scans[1][-1]] = self.logodds_map[scans[0][-1],scans[1][-1]] + self._odds_update
+            self.logodds_map[scans[0][:-1],scans[1][:-1]] = self.logodds_map[scans[0][:-1],scans[1][:-1]] - self._odds_update
+        
+        self.logodds_map[self.logodds_map>100]  = 100
+        self.logodds_map[self.logodds_map<-100]  = -100
+        P_occupied = 1/(1 + np.exp(-self.logodds_map))
+        self.occupancy_map = (P_occupied>0.75)*1 + (P_occupied<0.5)*(-1)
+        return self.occupancy_map,self.logodds_map
 
-        indValid = np.logical_and((ranges < range_max),(ranges> range_min))
-
-        ranges = ranges[indValid]#Removing all unlikely readings/noise
-        angles = angle_span[indValid]#Removing all unlikely readings/noise
-
-        #Converting range reading to xy coordinate reading where the bot is assumed to be at the origin
-        xs0 = ranges*np.cos(angles)
-        ys0 = ranges*np.sin(angles)
-        zs0  = np.zeros_like(angles)
-        coordinates = np.stack([xs0,ys0,zs0],axis=1)# in LIDAR Frame
-
-        #Converting xy cordinates to grid coordinates
-        xis = np.ceil((xs0 - self._grid_stats['minx'])/self._grid_stats['res']).astype(np.int16)-1
-        yis = np.ceil((ys0 - self._grid_stats['miny'])/self._grid_stats['res']).astype(np.int16)-1
-
-        #Filling occupancy grid
-        indGood = np.logical_and(np.logical_and(np.logical_and((xis > 1), (yis > 1)), (xis < self._shape[0])), (yis < self._shape[1]))
-        self.occupancy_map[xis[indGood[0]],yis[indGood[0]]]=1
-        self.logodds_map = self.occupancy_map*np.log(self._p11/self._p10) + (1-self.occupancy_map)*np.log(self._p00/self._p01)
-        if display_map==True:
-            plt.figure()
-            plt.title("Initialized Map")
-            plt.imshow(self.occupancy_map,cmap="hot")
-            #plt.xticks([])
-            #plt.yticks([])
-            plt.show()
-        return self.occupancy_map
-    
     @property
     def shape(self):
         '''
@@ -108,6 +132,17 @@ class ObservationModel:
         return self._grid_stats
 
     @property
+    def grid_shift_vector(self):
+        '''
+        Returns properties of map
+        Args:
+            self:pointer to current instance of the class
+        Returns:
+            grid_stats: statistics of grid
+        '''
+        return self._grid_shift_vector
+
+    @property
     def p11(self):
         '''
         Returns probability of grid cell being occupied when it is measured as occupied
@@ -117,14 +152,3 @@ class ObservationModel:
             p11:probability of grid cell being occupied when it is measured as occupied
         '''
         return self._p11
-
-    @property
-    def p00(self):
-        '''
-        Returns probability of grid cell being free when it is measured as free
-        Args:
-            self:pointer to current instance of the class
-        Returns:
-            p11:probability of grid cell being free when it is measured as free
-        '''
-        return self._p00
