@@ -17,12 +17,15 @@ class SLAM:
         self.particle_filter = particle_filter
         self.Obs_model = Obs_model
 
+        
     def __call__(self,LIDAR,IMU,ENCODER):
         '''
         '''
         lidar_tracking = LIDAR.time_stamps
         imu_tracking = IMU.time_stamps
         encoder_tracking = ENCODER.time_stamps
+        x = []
+        y = []
         for i in range(lidar_tracking.shape[0]):
             if i==0:
                 scan = LIDAR[0]
@@ -31,19 +34,29 @@ class SLAM:
             else:
                 scan = LIDAR[i]
                 imu_indices = np.logical_and(imu_tracking>=lidar_tracking[i-1],imu_tracking<lidar_tracking[i])
-                angle_shift = np.sum(IMU[imu_indices])
+                if np.sum(imu_indices)==0:
+                    angle_shift=0
+                else:
+                    angle_shift = np.mean(IMU[imu_indices])*(lidar_tracking[i] - lidar_tracking[i-1])
 
                 encoder_indices = np.logical_and(encoder_tracking>=lidar_tracking[i-1],encoder_tracking<lidar_tracking[i])
                 displacement = np.sum(ENCODER[encoder_indices])
 
                 self.particle_filter.particle_prediction(displacement,angle_shift)
-                self.particle_filter.particle_update(scan,self.Obs_model)
+                #self.particle_filter.particle_update(scan,self.Obs_model)
 
                 state = self.particle_filter.most_likely
                 occ_grid,_ =  self.Obs_model.generate_map(state,scan)
-        
-        plt.imshow(occ_grid,cmap='hot')
-        plt.show()
+                x = x + [np.floor((state[0] - self.Obs_model.grid_shift_vector[0])/self.Obs_model.grid_stats["res"]).astype(np.uint16)]
+                y = y + [np.floor((state[1] - self.Obs_model.grid_shift_vector[1])/self.Obs_model.grid_stats["res"]).astype(np.uint16)]
+            if i%10==0:
+                plt.scatter(x,y,s=0.25,c='r')
+                plt.imshow(occ_grid,cmap='gray')
+                plt.savefig("Plots/{}.png".format(i))
+                plt.close()
+                
+
+       
 
 if __name__ == '__main__':
     dataset = 20
@@ -73,7 +86,7 @@ if __name__ == '__main__':
         disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
         rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
 
-    Obs_model = ObservationModel(100,-100,100,-100,0.05,p11=0.65)
-    PF = ParticleFilter(100,75)
+    Obs_model = ObservationModel(30,-30,30,-30,0.05,p11=0.8)
+    PF = ParticleFilter(100,5)
     robot = SLAM(PF,Obs_model)
     robot(Hokuyo_reader,imu_reader,encoder_reader)

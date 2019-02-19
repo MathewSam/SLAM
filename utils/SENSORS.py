@@ -1,7 +1,7 @@
 import numpy as np
-
-
-    
+from scipy.signal import butter, lfilter
+import math
+   
 class LIDAR:
     def __init__(self,lidar_angle_min,lidar_angle_max,lidar_angle_increment,lidar_range_min,lidar_range_max,lidar_ranges,lidar_stamps,translation):
         '''
@@ -74,8 +74,15 @@ class IMU:
             angular_velocity : angular velocity at each time step
             time_stamps : time step 
         '''
-        self.angular_velocity = angular_velocity
+
+        self.omega = angular_velocity[2,:]
         self.time_stamps = time_stamps
+        fs = 1/(time_stamps[1]-time_stamps[0])
+        fc = 10
+        B, A = butter(1, fc / (fs / 2), btype='low') 
+        self.omega = lfilter(B, A, self.omega, axis=0)
+        #self.omega = (self.omega/180)*math.pi
+
 
     def __getitem__(self,index):
         '''
@@ -86,7 +93,7 @@ class IMU:
         returns:
             yaw,time_stamp: yaw velocity at index, time_stamp at index 
         '''
-        return self.angular_velocity[-1,index]
+        return self.omega[index]
 
     def __len__(self):
         '''
@@ -127,4 +134,7 @@ class Encoder:
             self : pointer to current instance of the class
         '''
         return self.time_stamps.shape[0]
+
+
+
 

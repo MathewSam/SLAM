@@ -94,19 +94,20 @@ class ObservationModel:
             particle : most likely particle 
             LIDAR_readings : Homogenous map from current LIDAR reading
         '''
-        wTb = np.array([[np.cos(particle[-1]),np.sin(particle[-1]),0,particle[0]],[-np.sin(particle[-1]),np.cos(particle[-1]),0,particle[1]],[0,0,1,0],[0,0,0,1]])
+        wTb = np.array([[np.cos(particle[-1]),-np.sin(particle[-1]),0,particle[0]],[np.sin(particle[-1]),np.cos(particle[-1]),0,particle[1]],[0,0,1,0],[0,0,0,1]])
         map_coordinates = np.floor((np.dot(wTb,LIDAR_reading)[:2,:] - self._grid_shift_vector.reshape(-1,1))/self._grid_stats["res"]).astype(np.uint16)#Transfer points into world co ordinates
         beam_source = np.floor((np.array([particle[0],particle[1]]) - self._grid_shift_vector)/self._grid_stats["res"]).astype(np.uint16)
         beam_ends = map_coordinates.T.tolist()
         for beam_end in beam_ends:
             scans = bresenham2D(beam_source[0],beam_source[1],beam_end[0],beam_end[1]).astype(np.uint16)
-            self.logodds_map[scans[0][-1],scans[1][-1]] = self.logodds_map[scans[0][-1],scans[1][-1]] + self._odds_update
-            self.logodds_map[scans[0][:-1],scans[1][:-1]] = self.logodds_map[scans[0][:-1],scans[1][:-1]] - self._odds_update
-        
-        self.logodds_map[self.logodds_map>100]  = 100
-        self.logodds_map[self.logodds_map<-100]  = -100
+            self.logodds_map[scans[1][-1],scans[0][-1]] = self.logodds_map[scans[1][-1],scans[0][-1]] + self._odds_update
+            self.logodds_map[scans[1][1:-1],scans[0][1:-1]] = self.logodds_map[scans[1][1:-1],scans[0][1:-1]] - self._odds_update
+        self.logodds_map[scans[1][0],scans[0][0]] = self.logodds_map[scans[1][0],scans[0][0]] - self._odds_update
+
+        #self.logodds_map[self.logodds_map>10]  = 10
+        #self.logodds_map[self.logodds_map<-10]  = -5
         P_occupied = 1/(1 + np.exp(-self.logodds_map))
-        self.occupancy_map = (P_occupied>0.75)*1 + (P_occupied<0.5)*(-1)
+        self.occupancy_map = (P_occupied>=0.95)*(1) + (P_occupied<0.005)*(-1)
         return self.occupancy_map,self.logodds_map
 
     @property
