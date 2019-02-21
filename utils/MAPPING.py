@@ -85,6 +85,7 @@ class ObservationModel:
 
         self.occupancy_map = np.zeros(self._shape,dtype=np.uint8)
         self.logodds_map = np.zeros(self._shape,dtype=np.float64)
+        self.texture_map = np.zeros((self._shape[0],self._shape[1],3))
 
     def generate_map(self,particle,LIDAR_reading):
         '''

@@ -1,8 +1,9 @@
 import numpy as np 
 import matplotlib.pyplot as plt
+from tqdm import trange
 from matplotlib import animation
 
-from utils.SENSORS import LIDAR,IMU,Encoder 
+from utils.SENSORS import LIDAR,IMU,Encoder,Kinect 
 from utils.MAPPING import ObservationModel
 from utils.PARTICLE_FILTER import ParticleFilter
 class SLAM:
@@ -10,9 +11,9 @@ class SLAM:
         '''
         Initializes the class that handles slam
         params:
-            self : 
-            particle_filter : 
-            Obs_model : 
+            self : pointer to current instance of the class
+            particle_filter : particle filter initialized at time 0
+            Obs_model : Observation model corresponding to particle filter
         '''
         self.particle_filter = particle_filter
         self.Obs_model = Obs_model
@@ -26,14 +27,15 @@ class SLAM:
         encoder_tracking = ENCODER.time_stamps
         x = []
         y = []
-        for i in range(lidar_tracking.shape[0]):
+
+        for i in trange(lidar_tracking.shape[0]):
             if i==0:
                 scan = LIDAR[0]
                 state = self.particle_filter.most_likely
                 occ_grid,_ =  self.Obs_model.generate_map(state,scan)
             else:
                 scan = LIDAR[i]
-                imu_indices = np.logical_and(imu_tracking>=lidar_tracking[i-1],imu_tracking<lidar_tracking[i])
+                imu_indices = np.logical_and(imu_tracking>=lidar_tracking[i-1],imu_tracking<lidar_tracking[i])               
                 if np.sum(imu_indices)==0:
                     angle_shift=0
                 else:
@@ -42,9 +44,10 @@ class SLAM:
                 encoder_indices = np.logical_and(encoder_tracking>=lidar_tracking[i-1],encoder_tracking<lidar_tracking[i])
                 displacement = np.sum(ENCODER[encoder_indices])
 
-                self.particle_filter.particle_prediction(displacement,angle_shift)
-                #self.particle_filter.particle_update(scan,self.Obs_model)
-
+                if displacement!=0 or angle_shift!=0:
+                    self.particle_filter.particle_prediction(displacement,angle_shift)
+                    self.particle_filter.particle_update(scan,self.Obs_model)
+                
                 state = self.particle_filter.most_likely
                 occ_grid,_ =  self.Obs_model.generate_map(state,scan)
                 x = x + [np.floor((state[0] - self.Obs_model.grid_shift_vector[0])/self.Obs_model.grid_stats["res"]).astype(np.uint16)]
@@ -85,8 +88,12 @@ if __name__ == '__main__':
     with np.load("Kinect%d.npz"%dataset) as data:
         disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
         rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
+        RGB_folder = "dataRGBD/RGB{}/".format(dataset)
+        disp_folder = "dataRGBD/Disparity{}/".format(dataset)
+        texture = Kinect(RGB_folder,disp_folder,rgb_stamps,disp_stamps)
+
 
     Obs_model = ObservationModel(30,-30,30,-30,0.05,p11=0.8)
-    PF = ParticleFilter(100,5)
+    PF = ParticleFilter(100,2)
     robot = SLAM(PF,Obs_model)
     robot(Hokuyo_reader,imu_reader,encoder_reader)

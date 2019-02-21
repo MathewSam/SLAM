@@ -1,7 +1,10 @@
+import os
+import math
 import numpy as np
 from scipy.signal import butter, lfilter
-import math
-   
+
+from skimage import color,io
+
 class LIDAR:
     def __init__(self,lidar_angle_min,lidar_angle_max,lidar_angle_increment,lidar_range_min,lidar_range_max,lidar_ranges,lidar_stamps,translation):
         '''
@@ -135,6 +138,8 @@ class Encoder:
         '''
         return self.time_stamps.shape[0]
 
-
-
-
+class Camera:
+    def __init__(self):
+        '''
+        Describes camera capture model
+        '''

@@ -1,7 +1,7 @@
 import numpy as np 
 from scipy.stats import multivariate_normal
 import math
-def mapCorrelation(im, x_im, y_im, vp, xs, ys):
+def mapCorrelation(im, x_im, y_im, vp, xs, ys,theta):
     '''
     INPUT 
     im              the map 
@@ -23,14 +23,14 @@ def mapCorrelation(im, x_im, y_im, vp, xs, ys):
     nxs = xs.size
     nys = ys.size
     cpr = np.zeros((nxs, nys))
+
     for jy in range(0,nys):
-        y1 = vp[1,:] + ys[jy] # 1 x 1076
-        iy = np.int16(np.round((y1-ymin)/yresolution))
         for jx in range(0,nxs):
-            x1 = vp[0,:] + xs[jx] # 1 x 1076
+            x1 = vp[0,:]*np.cos(theta) - vp[1,:]*np.sin(theta) + xs[jx] 
+            y1 = vp[0,:]*np.sin(theta) + vp[1,:]*np.cos(theta) + ys[jy] 
             ix = np.int16(np.round((x1-xmin)/xresolution))
-            valid = np.logical_and( np.logical_and((iy >=0), (iy < ny)), np.logical_and((ix >=0), (ix < nx)))
-            cpr[jx,jy] = np.sum(im[ix[valid],iy[valid]])
+            iy = np.int16(np.round((y1-ymin)/yresolution))
+            cpr[jx,jy] = np.sum(im[iy,ix])
     return cpr
 
 class ParticleFilter:
@@ -77,7 +77,7 @@ class ParticleFilter:
             LIDAR_reading : Homographic input from LIDAR module.
             Obsmodel : observation model
         '''
-        occ_grid = Obsmodel.occupancy_map#map to be fed into map correlation
+        occ_grid = Obsmodel.occupancy_map>0#map to be fed into map correlation
         grid_stats = Obsmodel.grid_stats
 
         ph = np.zeros_like(self.particle_weight)
@@ -85,13 +85,16 @@ class ParticleFilter:
         y_im = np.arange(grid_stats["miny"],grid_stats["maxy"] + grid_stats["res"],grid_stats["res"])
 
         for i in range(self.particles.shape[0]):
-            x_range = np.arange(-0.2,0.2+0.05,0.05)
-            y_range = np.arange(-0.2,0.2+0.05,0.05)
-            corr = mapCorrelation(occ_grid,x_im,y_im,LIDAR_reading,x_range,y_range)
+            x_c = self.particles[i][0]
+            y_c = self.particles[i][1]
+            theta = self.particles[i][2]
+            x_range = x_c + np.arange(-0.05,0.1,0.05)
+            y_range = y_c + np.arange(-0.05,0.1,0.05)
+            corr = mapCorrelation(occ_grid,x_im,y_im,LIDAR_reading,x_range,y_range,theta)
             ph[i] = np.max(corr)
             location = np.unravel_index(corr.argmax(), corr.shape)
-            self.particles[i,0] = self.particles[i,0] + (location[0] - 4)*grid_stats["res"]
-            self.particles[i,1] = self.particles[i,1] + (location[1] - 4)*grid_stats["res"]
+            self.particles[i,0] = self.particles[i,0] + (location[0] - 1)*0.05
+            self.particles[i,1] = self.particles[i,1] + (location[1] - 1)*0.05
 
         ph = np.exp(ph - np.max(ph))
         ph = ph/np.sum(ph)            
@@ -99,8 +102,12 @@ class ParticleFilter:
         self.particle_weight = ph*self.particle_weight
         self.particle_weight = self.particle_weight/np.sum(self.particle_weight)
 
+        if (1/np.sum(np.square(self.particle_weight)))<self.threshold:
+            self.resample()
+
     def resample(self):
         '''
+        Resampling module if "number of samples" drops below threshold
         '''
         j = 0
         c = self.particle_weight[0]
@@ -118,7 +125,8 @@ class ParticleFilter:
 
     @property
     def most_likely(self):
-        return self.particles[np.argmax(self.particle_weight),:]
+        return np.sum(self.particles*self.particle_weight,axis = 0)
+        #return self.particles[np.argmax(self.particle_weight),:]
 
     @property
     def resample_condn(self):
