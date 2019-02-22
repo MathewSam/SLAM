@@ -105,11 +105,28 @@ class ObservationModel:
             self.logodds_map[scans[1][1:-1],scans[0][1:-1]] = self.logodds_map[scans[1][1:-1],scans[0][1:-1]] - self._odds_update
         self.logodds_map[scans[1][0],scans[0][0]] = self.logodds_map[scans[1][0],scans[0][0]] - self._odds_update
 
-        #self.logodds_map[self.logodds_map>10]  = 10
-        #self.logodds_map[self.logodds_map<-10]  = -5
         P_occupied = 1/(1 + np.exp(-self.logodds_map))
         self.occupancy_map = (P_occupied>=0.95)*(1) + (P_occupied<0.005)*(-1)
         return self.occupancy_map,self.logodds_map
+
+    def generate_texture(self,particle,texture,body_frame):
+        '''
+        Generate map for a specific LIDAR readings
+        params:
+            self : pointer to current instance of the class
+            particle : most likely particle 
+            LIDAR_readings : Homogenous map from current LIDAR reading
+        '''
+        wTb = np.array([[np.cos(particle[-1]),-np.sin(particle[-1]),0,particle[0]],[np.sin(particle[-1]),np.cos(particle[-1]),0,particle[1]],[0,0,1,0],[0,0,0,1]])
+        map_coordinates = np.floor((np.dot(wTb,body_frame)[:2,:] - self._grid_shift_vector.reshape(-1,1))/self._grid_stats["res"]).astype(np.uint16)#Transfer points into world co ordinates
+        indices = np.logical_and(map_coordinates[1,:]<self.texture_map.shape[0],map_coordinates[0,:]<self.texture_map.shape[1])
+        map_coordinates = map_coordinates[:,indices]
+        self.texture_map[map_coordinates[1,:],map_coordinates[0,:],:] = texture/255
+        P_occupied = 1/(1 + np.exp(-self.logodds_map))
+        self.texture_map[:,:,0] = self.texture_map[:,:,0]*(P_occupied<0.05)
+        self.texture_map[:,:,1] = self.texture_map[:,:,1]*(P_occupied<0.05)
+        self.texture_map[:,:,2] = self.texture_map[:,:,2]*(P_occupied<0.05)
+        return self.texture_map
 
     @property
     def shape(self):

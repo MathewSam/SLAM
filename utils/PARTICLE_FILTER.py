@@ -47,7 +47,7 @@ class ParticleFilter:
         self.threshold = threshold
 
 
-    def particle_prediction(self,displacement,angle_shift,var=0.001):
+    def particle_prediction(self,displacement,angle_shift,var=0.000001):
         '''
         Particle prediction from Encoder and IMU angle values
         params:

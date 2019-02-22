@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from tqdm import trange
 from matplotlib import animation
 
-from utils.SENSORS import LIDAR,IMU,Encoder,Kinect 
+from utils.SENSORS import LIDAR,IMU,Encoder,Camera,IR
 from utils.MAPPING import ObservationModel
 from utils.PARTICLE_FILTER import ParticleFilter
 class SLAM:
@@ -19,12 +19,18 @@ class SLAM:
         self.Obs_model = Obs_model
 
         
-    def __call__(self,LIDAR,IMU,ENCODER):
+    def __call__(self,LIDAR,IMU,ENCODER,Kinect=None):
         '''
         '''
         lidar_tracking = LIDAR.time_stamps
         imu_tracking = IMU.time_stamps
         encoder_tracking = ENCODER.time_stamps
+        if Kinect!=None:
+            Camera,Ir = Kinect
+            cam_tracking = Camera.time_stamps
+            ir_tracking = Ir.time_stamps
+            texture_map = None
+
         x = []
         y = []
 
@@ -35,7 +41,8 @@ class SLAM:
                 occ_grid,_ =  self.Obs_model.generate_map(state,scan)
             else:
                 scan = LIDAR[i]
-                imu_indices = np.logical_and(imu_tracking>=lidar_tracking[i-1],imu_tracking<lidar_tracking[i])               
+                imu_indices = np.logical_and(imu_tracking>=lidar_tracking[i-1],imu_tracking<lidar_tracking[i])
+
                 if np.sum(imu_indices)==0:
                     angle_shift=0
                 else:
@@ -50,19 +57,38 @@ class SLAM:
                 
                 state = self.particle_filter.most_likely
                 occ_grid,_ =  self.Obs_model.generate_map(state,scan)
+
+                if Kinect!=None:
+                    cam_index = np.logical_and(cam_tracking>=lidar_tracking[i-1],cam_tracking<lidar_tracking[i]) 
+                    ir_index = np.logical_and(ir_tracking>=lidar_tracking[i-1],ir_tracking<lidar_tracking[i]) 
+                    if np.sum(cam_index)==1 and np.sum(ir_index)==1:
+                        cam_index = np.argmax(cam_index)
+                        ir_index = np.argmax(ir_index)
+                        image = Camera[cam_index]
+                        rgbi,rgbj,body_frame = Ir[ir_index]
+                        texture_pixels = image[rgbj,rgbi]
+                        texture_map = self.Obs_model.generate_texture(state,texture_pixels,body_frame)
+                        plt.scatter(x,y,s=0.2,c='r')
+                        plt.imshow(texture_map)
+                        plt.savefig("Plots/{}.png".format(i))
+                        plt.close()
+                
+
                 x = x + [np.floor((state[0] - self.Obs_model.grid_shift_vector[0])/self.Obs_model.grid_stats["res"]).astype(np.uint16)]
                 y = y + [np.floor((state[1] - self.Obs_model.grid_shift_vector[1])/self.Obs_model.grid_stats["res"]).astype(np.uint16)]
-            if i%10==0:
-                plt.scatter(x,y,s=0.25,c='r')
+
+            if i%10==0 and Kinect==None:
+                plt.scatter(x,y,s=0.1,c='r')
                 plt.imshow(occ_grid,cmap='gray')
                 plt.savefig("Plots/{}.png".format(i))
                 plt.close()
+
                 
 
        
 
 if __name__ == '__main__':
-    dataset = 20
+    dataset = 23
 
     with np.load("Encoders%d.npz"%dataset) as data:
         encoder_counts = data["counts"] # 4 x n encoder counts
@@ -84,16 +110,22 @@ if __name__ == '__main__':
         imu_linear_acceleration = data["linear_acceleration"] # Accelerations in gs (gravity acceleration scaling)
         imu_stamps = data["time_stamps"]  # acquisition times of the imu measurements
         imu_reader = IMU(imu_angular_velocity,imu_stamps)
+    try:
+        with np.load("Kinect%d.npz"%dataset) as data:
+            disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
+            rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
+            RGB_prefix = "dataRGBD/RGB{0}/rgb{1}_".format(dataset,dataset)
+            RGB_folder = "dataRGBD/RGB{0}/".format(dataset)
+            disp_prefix = "dataRGBD/Disparity{0}/disparity{1}_".format(dataset,dataset)
+            disp_folder = "dataRGBD/Disparity{0}/".format(dataset)
+            camera = Camera(RGB_folder,RGB_prefix,rgb_stamps)
+            ir = IR(disp_folder,disp_prefix,disp_stamps)
+            Kinect = (camera,ir)
+    except:
+        print("No Visual cues for dataset")
 
-    with np.load("Kinect%d.npz"%dataset) as data:
-        disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
-        rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
-        RGB_folder = "dataRGBD/RGB{}/".format(dataset)
-        disp_folder = "dataRGBD/Disparity{}/".format(dataset)
-        texture = Kinect(RGB_folder,disp_folder,rgb_stamps,disp_stamps)
 
-
-    Obs_model = ObservationModel(30,-30,30,-30,0.05,p11=0.8)
-    PF = ParticleFilter(100,2)
+    Obs_model = ObservationModel(40,-40,40,-40,0.05,p11=0.8)
+    PF = ParticleFilter(100,0.5)
     robot = SLAM(PF,Obs_model)
-    robot(Hokuyo_reader,imu_reader,encoder_reader)
+    robot(Hokuyo_reader,imu_reader,encoder_reader,Kinect=None)
