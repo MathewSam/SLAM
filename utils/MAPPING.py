@@ -111,7 +111,7 @@ class ObservationModel:
 
     def generate_texture(self,particle,texture,body_frame):
         '''
-        Generate map for a specific LIDAR readings
+        Generate texture map for a specific LIDAR readings
         params:
             self : pointer to current instance of the class
             particle : most likely particle 

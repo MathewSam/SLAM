@@ -27,11 +27,29 @@ to color the floor. Find the ground plane in the transformed data via thresholdi
 ### SLAM.py
 This is the main file in this repo. This file is responsible for synchronizing the timing data from the different sensors. Specifically, the data is loaded into classes designed in the utils folder of the project. The SLAM class which handles the synchronizations and the calls to the particle filter for particle prediction and update is initialized. The default parameters for grid size is xmin=-40, xmax =40,ymin =-40 and ymax =40. To run this code, simply type into command line 
 
-usage: SLAM.py [-h] dataset_id num_particles num_eff Show_texture
+>>> python SLAM.py dataset_id num_particles num_eff Show_texture
 
-positional arguments:
-  dataset_id     Expects a number associated with the datastream required. For the code to work the Encoders, IMU and Hokuyo data for dataset id must be present in the current working directory
-  num_particles  Indicates number of particles for SLAM
-  num_eff        number of effective samples for resampling
-  Show_texture   Expects a boolean value to indicate whether to do texture mapping or not
+positional arguments:</br>
+  |dataset_id     |Expects a number associated with the datastream required. For the code to work the Encoders, IMU and Hokuyo data for dataset id must be present in the current working directory</br>
+  |num_particles  |Indicates number of particles for SLAM</br>
+  |num_eff        |number of effective samples for resampling</br>
+  |Show_texture   |Expects a boolean value to indicate whether to do texture mapping or not</br>
+
+For help on how to run the file type in 
+>>> python SLAM.py -h
+
+Note the files pertaining to encoder, imu , lidar and kinect must be in the same working directory. This file uses all the other files in this project to implement SLAM. Please also create a folder called plots in the working directory to save the plots.
+
+### load_data.py
+Sample file provided to show how the data is loaded in the files
+
+### utils/SENSORS.py
+This file encapsulates all the classes to load the data providing indexing mechanisms to index sensor data that is processed to provide the specific information that is needed by the SLAM class. Documentation for all classes are attached with the code
+
+### utils/MAPPING.py
+This file contains the Observation model class that is a wrapper for the occupancy grid, log odds map and the texture map. Documentation for all the files should be provided with the functions.
+
+### utils/PARTICLE_FILTER.py
+This file contains the functions for particle prediction and update after providing necessa 
+
 
