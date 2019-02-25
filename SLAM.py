@@ -9,6 +9,8 @@ from utils.SENSORS import LIDAR,IMU,Encoder,Camera,IR
 from utils.MAPPING import ObservationModel
 from utils.PARTICLE_FILTER import ParticleFilter
 
+
+
 class SLAM:
     def __init__(self,particle_filter,Obs_model):
         '''
@@ -91,14 +93,10 @@ class SLAM:
        
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dataset_id",help=" Expects a number associated with the datastream required. For the code to work the Encoders, IMU and Hokuyo data for dataset id must be present in the current working directory",type=int)
-    parser.add_argument("num_particles",help="Indicates number of particles for SLAM",type=int,default=100)
-    parser.add_argument("num_eff",help="number of effective samples for resampling",type=int,default=1)
-    parser.add_argument("Show_texture",help="Expects a boolean value to indicate whether to do texture mapping or not",type=bool,default=False)
-    args = parser.parse_args()
-
-    dataset = args.dataset_id
+    dataset = 20
+    num_particles = 100
+    num_eff = 1
+    Show_texture = False
 
     with np.load("Encoders%d.npz"%dataset) as data:
         encoder_counts = data["counts"] # 4 x n encoder counts
@@ -121,24 +119,23 @@ if __name__ == '__main__':
         imu_stamps = data["time_stamps"]  # acquisition times of the imu measurements
         imu_reader = IMU(imu_angular_velocity,imu_stamps)
 
+    with np.load("Kinect%d.npz"%dataset) as data:
+        disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
+        rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
+        RGB_prefix = "dataRGBD/RGB{0}/rgb{1}_".format(dataset,dataset)
+        RGB_folder = "dataRGBD/RGB{0}/".format(dataset)
+        disp_prefix = "dataRGBD/Disparity{0}/disparity{1}_".format(dataset,dataset)
+        disp_folder = "dataRGBD/Disparity{0}/".format(dataset)
+        camera = Camera(RGB_folder,RGB_prefix,rgb_stamps)
+        ir = IR(disp_folder,disp_prefix,disp_stamps)
+        Kinect = (camera,ir)
+
     Obs_model = ObservationModel(40,-40,40,-40,0.05,p11=0.8)
-    PF = ParticleFilter(args.num_particles,args.num_eff)
+    PF = ParticleFilter(num_particles,num_eff)
     robot = SLAM(PF,Obs_model)
-    if args.Show_texture == False:
+    if Show_texture == False:
         robot(Hokuyo_reader,imu_reader,encoder_reader,Kinect=None)
     else:
-            try:
-                with np.load("Kinect%d.npz"%dataset) as data:
-                    disp_stamps = data["disparity_time_stamps"] # acquisition times of the disparity images
-                    rgb_stamps = data["rgb_time_stamps"] # acquisition times of the rgb images
-                    RGB_prefix = "dataRGBD/RGB{0}/rgb{1}_".format(dataset,dataset)
-                    RGB_folder = "dataRGBD/RGB{0}/".format(dataset)
-                    disp_prefix = "dataRGBD/Disparity{0}/disparity{1}_".format(dataset,dataset)
-                    disp_folder = "dataRGBD/Disparity{0}/".format(dataset)
-                    camera = Camera(RGB_folder,RGB_prefix,rgb_stamps)
-                    ir = IR(disp_folder,disp_prefix,disp_stamps)
-                    Kinect = (camera,ir)
-                    robot(Hokuyo_reader,imu_reader,encoder_reader,Kinect=Kinect)
-            except:
-                print("No Visual cues for dataset")
+        robot(Hokuyo_reader,imu_reader,encoder_reader,Kinect=Kinect)
+
 

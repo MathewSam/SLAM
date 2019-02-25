@@ -4,6 +4,8 @@ range, and RGBD measurements from a differential-drive robot. Use the IMU, odome
 measurements to localize the robot and build a 2-D occupancy grid map of the environment. Use the
 RGBD information to color the floor of your 2-D map.
 
+**PLEASE extract RGBD.zip for kinect data
+
 ## Goals
 The goal of the projects is to use an occupancy grid for mapping and a particle filter with a laser-grid correlation model for localization.
 - **MAPPING**:Try mapping from the first scan and plot the map to make sure your transforms are
@@ -27,16 +29,15 @@ to color the floor. Find the ground plane in the transformed data via thresholdi
 ### SLAM.py
 This is the main file in this repo. This file is responsible for synchronizing the timing data from the different sensors. Specifically, the data is loaded into classes designed in the utils folder of the project. The SLAM class which handles the synchronizations and the calls to the particle filter for particle prediction and update is initialized. The default parameters for grid size is xmin=-40, xmax =40,ymin =-40 and ymax =40. To run this code, simply type into command line 
 
->>> python SLAM.py dataset_id num_particles num_eff Show_texture
+>>> python SLAM.py 
 
-positional arguments:</br>
+ arguments to change in SLAM.py for different conditions:</br>
   |dataset_id     |Expects a number associated with the datastream required. For the code to work the Encoders, IMU and Hokuyo data for dataset id must be present in the current working directory</br>
   |num_particles  |Indicates number of particles for SLAM</br>
   |num_eff        |number of effective samples for resampling</br>
   |Show_texture   |Expects a boolean value to indicate whether to do texture mapping or not</br>
 
-For help on how to run the file type in 
->>> python SLAM.py -h
+
 
 Note the files pertaining to encoder, imu , lidar and kinect must be in the same working directory. This file uses all the other files in this project to implement SLAM. Please also create a folder called plots in the working directory to save the plots.
 
