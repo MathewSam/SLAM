@@ -13,4 +13,5 @@ utils/__pycache__/*
 *.npz
 *.npy
 *.gif
+*.pdf
 movie.gif

@@ -106,7 +106,7 @@ class ObservationModel:
         self.logodds_map[scans[1][0],scans[0][0]] = self.logodds_map[scans[1][0],scans[0][0]] - self._odds_update
 
         P_occupied = 1/(1 + np.exp(-self.logodds_map))
-        self.occupancy_map = (P_occupied>=0.95)*(1) + (P_occupied<0.005)*(-1)
+        self.occupancy_map = (P_occupied>=0.95)*(1) + (P_occupied<0.01)*(-1)
         return self.occupancy_map,self.logodds_map
 
     def generate_texture(self,particle,texture,body_frame):

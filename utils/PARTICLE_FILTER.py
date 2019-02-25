@@ -30,7 +30,8 @@ def mapCorrelation(im, x_im, y_im, vp, xs, ys,theta):
             y1 = vp[0,:]*np.sin(theta) + vp[1,:]*np.cos(theta) + ys[jy] 
             ix = np.int16(np.round((x1-xmin)/xresolution))
             iy = np.int16(np.round((y1-ymin)/yresolution))
-            cpr[jx,jy] = np.sum(im[iy,ix])
+            ind = np.logical_and(ix<nx,iy<ny)
+            cpr[jx,jy] = np.sum(im[iy[ind],ix[ind]])
     return cpr
 
 class ParticleFilter:
@@ -125,8 +126,8 @@ class ParticleFilter:
 
     @property
     def most_likely(self):
-        return np.sum(self.particles*self.particle_weight,axis = 0)
-        #return self.particles[np.argmax(self.particle_weight),:]
+        #return np.sum(self.particles*self.particle_weight,axis = 0)
+        return self.particles[np.argmax(self.particle_weight),:]
 
     @property
     def resample_condn(self):
